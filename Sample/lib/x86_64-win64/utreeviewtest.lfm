@@ -1,0 +1,616 @@
+object fTreeViewVes: TfTreeViewVes
+  Left = 663
+  Height = 461
+  Top = 269
+  Width = 752
+  Caption = 'Tree View Test'
+  ClientHeight = 461
+  ClientWidth = 752
+  OnShow = FormShow
+  LCLVersion = '2.1.0.0'
+  object DBTreeView1: TDBTreeView
+    Left = 0
+    Height = 461
+    Top = 0
+    Width = 312
+    Align = alLeft
+    TextField = 'DEPARTMENT'
+    DataSource = DataSource1
+    Images = ImageList1
+    HasChildField = 'CHILDCOUNT'
+    ImageIndexField = 'IMAGEINDEX'
+    DataFields = 'PHONE_NO'
+    SelectedIndexField = 'IMAGEINDEX'
+    KeyField = 'DEPT_NO'
+    ParentField = 'HEAD_DEPT'
+    PopupMenu = PopupMenu1
+    RelationName = 'A'
+    ScrollBars = ssAutoBoth
+    TabOrder = 0
+    OnSelectionChanged = DBTreeView1SelectionChanged
+  end
+  object lblData: TLabel
+    Left = 364
+    Height = 15
+    Top = 26
+    Width = 263
+    Caption = 'Here you will see phone number from node cashe'
+    ParentColor = False
+  end
+  object DBCntrlGrid1: TDBCntrlGrid
+    Left = 328
+    Height = 376
+    Top = 64
+    Width = 408
+    AlternateColor = clActiveBorder
+    AltColorStartNormal = True
+    Anchors = [akTop, akLeft, akRight, akBottom]
+    Color = clWindow
+    DataSource = DataSource2
+    DefaultPositionAtEnd = False
+    DrawPanel = Panel1
+    Options = [dgpIndicator]
+    TabOrder = 1
+    ColWidths = (
+      12
+      375
+    )
+    object Panel1: TPanel
+      Left = 12
+      Height = 50
+      Top = 0
+      Width = 375
+      ClientHeight = 50
+      ClientWidth = 375
+      TabOrder = 0
+      object Label1: TLabel
+        Left = 8
+        Height = 15
+        Top = 0
+        Width = 55
+        Caption = 'First name'
+        ParentColor = False
+      end
+      object DBEdit1: TDBEdit
+        Left = 8
+        Height = 23
+        Top = 21
+        Width = 80
+        DataField = 'FIRST_NAME'
+        DataSource = DataSource2
+        MaxLength = 0
+        TabOrder = 0
+      end
+      object Label2: TLabel
+        Left = 112
+        Height = 15
+        Top = 0
+        Width = 54
+        Caption = 'Last name'
+        ParentColor = False
+      end
+      object DBEdit2: TDBEdit
+        Left = 112
+        Height = 23
+        Top = 21
+        Width = 80
+        DataField = 'LAST_NAME'
+        DataSource = DataSource2
+        MaxLength = 0
+        TabOrder = 1
+      end
+      object DBNavigator1: TDBNavigator
+        Left = 248
+        Height = 25
+        Top = 21
+        Width = 113
+        BevelOuter = bvNone
+        ChildSizing.EnlargeHorizontal = crsScaleChilds
+        ChildSizing.EnlargeVertical = crsScaleChilds
+        ChildSizing.ShrinkHorizontal = crsScaleChilds
+        ChildSizing.ShrinkVertical = crsScaleChilds
+        ChildSizing.Layout = cclLeftToRightThenTopToBottom
+        ChildSizing.ControlsPerLine = 100
+        ClientHeight = 25
+        ClientWidth = 113
+        DataSource = DataSource2
+        Options = []
+        TabOrder = 2
+        VisibleButtons = [nbPrior, nbDelete, nbEdit, nbPost, nbCancel]
+      end
+    end
+  end
+  object Label3: TLabel
+    Left = 328
+    Height = 15
+    Top = 40
+    Width = 119
+    Caption = 'Sample DBControlGrid'
+    ParentColor = False
+  end
+  object DataSource1: TDataSource
+    DataSet = SQLQuery1
+    Left = 224
+    Top = 60
+  end
+  object IBConnection1: TIBConnection
+    Connected = False
+    LoginPrompt = False
+    KeepDatasetsOpenOnDisconnect = False
+    DatabaseName = 'localhost:employee'
+    KeepConnection = False
+    Password = 'masterkey'
+    Transaction = SQLTransaction1
+    UserName = 'sysdba'
+    CheckTransactionParams = False
+    UseConnectionCharSetIfNone = False
+    WireCompression = True
+    Left = 227
+    Top = 111
+  end
+  object SQLTransaction1: TSQLTransaction
+    Active = False
+    Database = IBConnection1
+    Left = 224
+    Top = 160
+  end
+  object SQLQuery1: TSQLQuery
+    IndexName = 'DEFAULT_ORDER'
+    MaxIndexesCount = 4
+    FieldDefs = <    
+      item
+        Name = 'DEPT_NO'
+        DataType = ftFixedChar
+        Precision = -1
+        Size = 3
+      end    
+      item
+        Name = 'DEPARTMENT'
+        DataType = ftString
+        Precision = -1
+        Size = 25
+      end    
+      item
+        Name = 'HEAD_DEPT'
+        DataType = ftFixedChar
+        Precision = -1
+        Size = 3
+      end    
+      item
+        Name = 'MNGR_NO'
+        DataType = ftSmallint
+        Precision = -1
+      end    
+      item
+        Name = 'BUDGET'
+        DataType = ftBCD
+        Precision = 18
+        Size = 2
+      end    
+      item
+        Name = 'LOCATION'
+        DataType = ftString
+        Precision = -1
+        Size = 15
+      end    
+      item
+        Name = 'PHONE_NO'
+        DataType = ftString
+        Precision = -1
+        Size = 20
+      end    
+      item
+        Name = 'CHILDCOUNT'
+        DataType = ftLargeint
+        Precision = -1
+      end    
+      item
+        Name = 'IMAGEINDEX'
+        DataType = ftInteger
+        Precision = -1
+      end>
+    Database = IBConnection1
+    Transaction = SQLTransaction1
+    SQL.Strings = (
+      'Select A.DEPT_NO, A.DEPARTMENT, A.HEAD_DEPT, A.MNGR_NO, A.BUDGET, A.LOCATION, A.PHONE_NO,'
+      'count(B.DEPT_NO) as ChildCount,'
+      'case'
+      '  when A.Budget < 500000 then 0'
+      '  when A.Budget = 500000 then 2'
+      '  else 1 end as ImageIndex'
+      'From DEPARTMENT A'
+      'Left Outer JOIN DEPARTMENT B On B.HEAD_DEPT = A.DEPT_NO'
+      'where A."HEAD_DEPT" is null AND '
+      '1=1'
+      'Group By A.DEPT_NO, A.DEPARTMENT, A.HEAD_DEPT, A.MNGR_NO, A.BUDGET, A.LOCATION, A.PHONE_NO'
+      'Order by Department'
+      ''
+    )
+    InsertSQL.Strings = (
+      'Insert Into DEPARTMENT(DEPT_NO, DEPARTMENT, HEAD_DEPT, MNGR_NO, BUDGET, LOCATION, PHONE_NO)'
+      'Values(:DEPT_NO, :DEPARTMENT, :HEAD_DEPT, :MNGR_NO, :BUDGET, :LOCATION, :PHONE_NO)'
+      ''
+    )
+    UpdateSQL.Strings = (
+      'Update DEPARTMENT A Set'
+      '  A.BUDGET = :BUDGET,'
+      '  A.DEPARTMENT = :DEPARTMENT,'
+      '  A.HEAD_DEPT = :HEAD_DEPT,'
+      '  A.LOCATION = :LOCATION,'
+      '  A.MNGR_NO = :MNGR_NO,'
+      '  A.PHONE_NO = :PHONE_NO'
+      'Where A.DEPT_NO = :OLD_DEPT_NO'
+      ''
+    )
+    DeleteSQL.Strings = (
+      'Delete From DEPARTMENT A'
+      'Where A.DEPT_NO = :DEPT_NO'
+      ''
+    )
+    Params = <>
+    Macros = <>
+    Sequence.FieldName = 'DEPT_NO'
+    Sequence.SequenceName = 'EMP_NO_GEN'
+    Left = 224
+    Top = 215
+    object SQLQuery1DEPT_NO: TStringField
+      FieldKind = fkData
+      FieldName = 'DEPT_NO'
+      Index = 0
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere, pfInKey]
+      ReadOnly = False
+      Required = True
+      Size = 3
+    end
+    object SQLQuery1DEPARTMENT: TStringField
+      FieldKind = fkData
+      FieldName = 'DEPARTMENT'
+      Index = 1
+      LookupCache = False
+      ProviderFlags = [pfInUpdate]
+      ReadOnly = False
+      Required = True
+      Size = 25
+    end
+    object SQLQuery1HEAD_DEPT: TStringField
+      FieldKind = fkData
+      FieldName = 'HEAD_DEPT'
+      Index = 2
+      LookupCache = False
+      ProviderFlags = [pfInUpdate]
+      ReadOnly = False
+      Required = False
+      Size = 3
+    end
+    object SQLQuery1MNGR_NO: TSmallintField
+      FieldKind = fkData
+      FieldName = 'MNGR_NO'
+      Index = 3
+      LookupCache = False
+      ProviderFlags = [pfInUpdate]
+      ReadOnly = False
+      Required = False
+    end
+    object SQLQuery1BUDGET: TBCDField
+      FieldKind = fkData
+      FieldName = 'BUDGET'
+      Index = 4
+      LookupCache = False
+      ProviderFlags = [pfInUpdate]
+      ReadOnly = False
+      Required = False
+      Precision = 18
+      Currency = False
+      MaxValue = 0
+      MinValue = 0
+      Size = 2
+    end
+    object SQLQuery1LOCATION: TStringField
+      FieldKind = fkData
+      FieldName = 'LOCATION'
+      Index = 5
+      LookupCache = False
+      ProviderFlags = [pfInUpdate]
+      ReadOnly = False
+      Required = False
+      Size = 15
+    end
+    object SQLQuery1PHONE_NO: TStringField
+      FieldKind = fkData
+      FieldName = 'PHONE_NO'
+      Index = 6
+      LookupCache = False
+      ProviderFlags = [pfInUpdate]
+      ReadOnly = False
+      Required = False
+    end
+    object SQLQuery1CHILDCOUNT: TLargeintField
+      FieldKind = fkData
+      FieldName = 'CHILDCOUNT'
+      Index = 7
+      LookupCache = False
+      ProviderFlags = [pfInUpdate]
+      ReadOnly = False
+      Required = True
+    end
+    object SQLQuery1IMAGEINDEX: TLongintField
+      FieldKind = fkData
+      FieldName = 'IMAGEINDEX'
+      Index = 8
+      LookupCache = False
+      ProviderFlags = [pfInUpdate]
+      ReadOnly = False
+      Required = True
+    end
+  end
+  object ActionList1: TActionList
+    Left = 56
+    Top = 288
+    object DeleteNode: TAction
+      Caption = 'Delete'
+      OnExecute = DeleteNodeExecute
+      OnUpdate = AddChildUpdate
+    end
+    object AddChild: TAction
+      Caption = 'Add Department to Child List'
+      OnExecute = AddChildExecute
+      OnUpdate = AddChildUpdate
+    end
+    object AddSibling: TAction
+      Caption = 'Add Sibling'
+      OnExecute = AddSiblingExecute
+      OnUpdate = AddChildUpdate
+    end
+    object AddFirstChild: TAction
+      Caption = 'Add Department as First Child'
+      OnExecute = AddFirstChildExecute
+      OnUpdate = AddChildUpdate
+    end
+  end
+  object PopupMenu1: TPopupMenu
+    Left = 52
+    Top = 232
+    object MenuItem3: TMenuItem
+      Action = AddSibling
+    end
+    object MenuItem4: TMenuItem
+      Action = AddFirstChild
+    end
+    object MenuItem2: TMenuItem
+      Action = AddChild
+    end
+    object MenuItem1: TMenuItem
+      Action = DeleteNode
+    end
+  end
+  object ImageList1: TImageList
+    Left = 92
+    Top = 164
+    Bitmap = {
+      4C7A030000001000000010000000830200000000000078DAED96DD4FD2511CC6
+      BBE2BFA8F9AE65CE9AD3E1CC581A26904A395F28C182207AD10CCD2901338C7C
+      43F3059B32B4D0B459DA56EB828DA9248A412DA4ECC5F843B87C3AE7B745ADB5
+      E4B07151F3E2B9FCEC77CEF99DCF73BE00F62101D16EB6E1B2AF15EAB5162857
+      9AC0CA6B367498F9FA0C8FBE2C40EED232F32ACF0D4C7F7E02C7F61C642F55CC
+      7CA3FB2AECDBB398F8E844F55339337FFE951A0F3E3C846DCB81CA993A66BE76
+      A91163413B86DF4FA0DC2E65E6A5F3320CBD1BC7C0DB31948C8A9979F17435FA
+      0323E8F10FE1587F29332F1C3F0DCBA615665F1F0ACCC54C7CA94DC2AFB4D7E0
+      CE460F4C5E0B8EEA0B62E6C95E5DC5566144BD741DC63533F4AFBB20199522B3
+      E970244D9BE5DE8D277BE5F1BB8FEF9C99AC43A7C784F65503CA062548D56486
+      9394A9BC58D791732B2F587EBF0242AB1829EA8C503C0EA55F39B89E7C29DD8F
+      04399AE810FFFDC4FFF57858E27FC814E8C5ED3716EA7F90A177789A755DD810
+      E889FADFEA31A26651B1439CD8F5FFA9BD37DDCAD5E648A7AF3BEABFD17B0F55
+      8FEB23C409573CFECB17D51039CEF2F7FC8F3D82C1B2B8FCFF91428B20EA7FB6
+      EE08339F672C8CFA9F712D9B9927FEA36D590FDD7207F59F99CF6ACE01F11FC4
+      7F1CB890827FB503FEA79C9AAC729F1811F1E2E5091B29EA2D09FF6956A221DD
+      838B6456A2F34EFD0B25AA171A50E1AC05F92E088B73B34AD44C3520B7233FF4
+      3B3FF7ED39372FD1CEA3BD45BB87F607ED80BEC030717180F3893A211E91D2BB
+      E5FFA5F3B839CBF1698EEB3BDBD614D73BB43BA8FFD46193F72EE752FB8A817B
+      D3925569D15EFFDB9AC97E91DF550441AF1032A702270744940DB29EDDA1965C
+      3E597384B03BF19E3F615DFB1549BCBDBBFC33DF01FF988370
+    }
+  end
+  object SQLQuery2: TSQLQuery
+    FieldDefs = <    
+      item
+        Name = 'EMP_NO'
+        DataType = ftSmallint
+        Precision = -1
+      end    
+      item
+        Name = 'FIRST_NAME'
+        DataType = ftString
+        Precision = -1
+        Size = 15
+      end    
+      item
+        Name = 'LAST_NAME'
+        DataType = ftString
+        Precision = -1
+        Size = 20
+      end    
+      item
+        Name = 'PHONE_EXT'
+        DataType = ftString
+        Precision = -1
+        Size = 4
+      end    
+      item
+        Name = 'HIRE_DATE'
+        DataType = ftDateTime
+        Precision = -1
+      end    
+      item
+        Name = 'DEPT_NO'
+        DataType = ftFixedChar
+        Precision = -1
+        Size = 3
+      end    
+      item
+        Name = 'JOB_CODE'
+        DataType = ftString
+        Precision = -1
+        Size = 5
+      end    
+      item
+        Name = 'JOB_GRADE'
+        DataType = ftSmallint
+        Precision = -1
+      end    
+      item
+        Name = 'JOB_COUNTRY'
+        DataType = ftString
+        Precision = -1
+        Size = 15
+      end    
+      item
+        Name = 'SALARY'
+        DataType = ftBCD
+        Precision = 18
+        Size = 2
+      end    
+      item
+        Name = 'FULL_NAME'
+        DataType = ftString
+        Precision = -1
+        Size = 37
+      end>
+    Database = IBConnection1
+    Transaction = SQLTransaction1
+    SQL.Strings = (
+      'Select * from employee where DEPT_NO=:DEPT_NO'
+      ''
+    )
+    Params = <    
+      item
+        DataType = ftUnknown
+        Name = 'DEPT_NO'
+        ParamType = ptInput
+      end>
+    Macros = <>
+    Left = 224
+    Top = 291
+    object SQLQuery2EMP_NO: TSmallintField
+      FieldKind = fkData
+      FieldName = 'EMP_NO'
+      Index = 0
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = True
+    end
+    object SQLQuery2FIRST_NAME: TStringField
+      FieldKind = fkData
+      FieldName = 'FIRST_NAME'
+      Index = 1
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = True
+      Size = 15
+    end
+    object SQLQuery2LAST_NAME: TStringField
+      FieldKind = fkData
+      FieldName = 'LAST_NAME'
+      Index = 2
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = True
+    end
+    object SQLQuery2PHONE_EXT: TStringField
+      FieldKind = fkData
+      FieldName = 'PHONE_EXT'
+      Index = 3
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = False
+      Size = 4
+    end
+    object SQLQuery2HIRE_DATE: TDateTimeField
+      FieldKind = fkData
+      FieldName = 'HIRE_DATE'
+      Index = 4
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = True
+    end
+    object SQLQuery2DEPT_NO: TStringField
+      FieldKind = fkData
+      FieldName = 'DEPT_NO'
+      Index = 5
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = True
+      Size = 3
+    end
+    object SQLQuery2JOB_CODE: TStringField
+      FieldKind = fkData
+      FieldName = 'JOB_CODE'
+      Index = 6
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = True
+      Size = 5
+    end
+    object SQLQuery2JOB_GRADE: TSmallintField
+      FieldKind = fkData
+      FieldName = 'JOB_GRADE'
+      Index = 7
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = True
+    end
+    object SQLQuery2JOB_COUNTRY: TStringField
+      FieldKind = fkData
+      FieldName = 'JOB_COUNTRY'
+      Index = 8
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = True
+      Size = 15
+    end
+    object SQLQuery2SALARY: TBCDField
+      FieldKind = fkData
+      FieldName = 'SALARY'
+      Index = 9
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = True
+      Precision = 18
+      Currency = False
+      MaxValue = 0
+      MinValue = 0
+      Size = 2
+    end
+    object SQLQuery2FULL_NAME: TStringField
+      FieldKind = fkData
+      FieldName = 'FULL_NAME'
+      Index = 10
+      LookupCache = False
+      ProviderFlags = [pfInUpdate, pfInWhere]
+      ReadOnly = False
+      Required = False
+      Size = 37
+    end
+  end
+  object SQLTransaction2: TSQLTransaction
+    Active = False
+    Database = IBConnection1
+    Left = 224
+    Top = 339
+  end
+  object DataSource2: TDataSource
+    DataSet = SQLQuery2
+    Left = 252
+    Top = 320
+  end
+end

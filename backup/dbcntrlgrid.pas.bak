@@ -290,7 +290,7 @@ type
     property OnStartDrag;
     property OnUTF8KeyPress;
     property OnUpdateActive : TNotifyEvent read fOnUpdateActive Write FOnUpdateActive;
-    Property SelectedRowIndicatorColor : TColor read fSelectedRowIndicatorColor Write SetSelectedRowIndicatorColor default clBtnFace;
+    Property SelectedRowIndicatorColor : TColor read fSelectedRowIndicatorColor Write SetSelectedRowIndicatorColor default clSkyBlue;
 end;
 
 
@@ -1737,7 +1737,7 @@ begin
   ColCount := 1;
   FixedRows := 0;
   RowCount := 1;
-  fSelectedRowIndicatorColor:=clBtnFace;
+  fSelectedRowIndicatorColor:=clSkyBlue;
   ColWidths[0] := Scale96ToFont(COL_WIDTH);
   Columns.Add.ReadOnly := true; {Add Dummy Column for Panel}
   DoGridResize;
