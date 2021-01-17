@@ -13,7 +13,7 @@
     </CompilerOptions>
     <Description Value="Data controls
 DBTreeView Ported from the original IBX Tree view"/>
-    <Version Build="1"/>
+    <Version Minor="1" Build="1"/>
     <Files>
       <Item>
         <Filename Value="dbtreeview.pas"/>

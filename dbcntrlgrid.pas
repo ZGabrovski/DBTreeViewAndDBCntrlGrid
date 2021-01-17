@@ -120,6 +120,7 @@ type
     FOnCheckBrowseMode: TDataSetNotifyEvent;
   protected
     procedure CheckBrowseMode; override;
+
   public
     property OnCheckBrowseMode: TDataSetNotifyEvent read FOnCheckBrowseMode write FOnCheckBrowseMode;
   end;
@@ -153,9 +154,6 @@ type
     FCacheRefreshQueued: boolean;   {cache refresh requested during wmpaint}
     FModified: boolean;
     FLastRecordCount: integer;
-    fSavedRecNo : Integer;
-    fInternalUpdate : Boolean;
-    fInternalTimer : TTimer;
 
     {Used to pass mouse clicks to panel when focused row changes}
     FLastMouse: TPoint;
@@ -187,7 +185,6 @@ type
     procedure OnLayoutChanged(aDataSet: TDataSet);
     procedure OnNewDataSet(aDataSet: TDataset);
     procedure OnDataSetScrolled(aDataSet:TDataSet; Distance: Integer);
-    procedure OnTimer(Sender: TObject);
     procedure OnUpdateData(aDataSet: TDataSet);
     procedure SetDataSource(AValue: TDataSource);
     procedure SetDrawPanel(AValue: TWinControl);
@@ -216,7 +213,7 @@ type
     procedure GridMouseWheel(shift: TShiftState; Delta: Integer); override;
     procedure KeyDown(var Key : Word; Shift : TShiftState); override;
     procedure LinkActive(Value: Boolean); virtual;
-    procedure LayoutChanged; virtual;
+    procedure LayoutChanged(aDataSet: TDataSet); virtual;
     procedure MouseDown(Button: TMouseButton; Shift:TShiftState; X,Y:Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift:TShiftState; X,Y:Integer); override;
     procedure MoveSelection; override;
@@ -237,6 +234,7 @@ type
     function ExecuteAction(AAction: TBasicAction): Boolean; override;
     function UpdateAction(AAction: TBasicAction): Boolean; override;
     property Datalink: TDBCntrlGridDataLink read FDatalink;
+    procedure Init( DS : TDataSource );
   published
     { Published declarations }
     property Align;
@@ -299,7 +297,7 @@ end;
 
 
 const
-  COL_WIDTH = 42;
+  COL_WIDTH = 20;
   FRAME_OFFSET = 8;
 
 procedure Register;
@@ -316,7 +314,6 @@ begin
   if assigned(FOnCheckBrowseMode) then
     OnCheckBrowseMode(DataSet);
 end;
-
 
 procedure copyImage(form : TCustomControl; destination : TBitmap);
 //procedure that assigns the screenshot of "form" to "destination"
@@ -348,10 +345,10 @@ begin
     Container.Canvas.FillRect(0,0,Control.Width,Control.Height);
     //copyImage( TCustomControl( Control ), Container );
     Control.PaintTo( Container.Canvas,0,0 );
-    //if ssShift in GetKeyShiftState then begin
-    //  Container.SaveToFile('c:\temp\'+ii.toString+'.bmp');
-    //  inc (ii)
-    //end;
+    if ssShift in GetKeyShiftState then begin
+      Container.SaveToFile('c:\temp\'+ii.toString+'.bmp');
+      inc (ii)
+    end;
     //Container.SaveToClipboardFormat( PredefinedClipboardFormat(pcfBitmap) );
   except
     Container.Free;
@@ -677,7 +674,6 @@ begin
   aRow := integer(Data);
   FInCacheRefresh := true;
   if assigned(FDataLink.DataSet) then begin
-    fInternalUpdate := True;
     FDatalink.DataSet.MoveBy(aRow - FDrawRow);
   end;
 end;
@@ -756,7 +752,7 @@ begin
       and (FModified or (FRowCache.IsEmpty(aDataSet.RecNo))) then
   begin
     RecNo := aDataSet.RecNo;
-    Application.ProcessMessages;
+    //Application.ProcessMessages;
     if RecNo = aDataSet.RecNo then   {Guard against sudden changes}
       FRowCache.Add2Cache(RecNo,FDrawPanel);
   end;
@@ -779,7 +775,7 @@ begin
       FRowCache.MarkAsDeleted(FSelectedRecNo);
       Dec(FSelectedRow);
     end;
-    LayoutChanged;
+    LayoutChanged(aDataSet);
   end;
   FLastRecordCount := GetRecordCount;
   if aDataSet.State = dsInsert then
@@ -824,7 +820,7 @@ end;
 
 procedure TDBCntrlGrid.OnLayoutChanged(aDataSet: TDataSet);
 begin
-  LayoutChanged;
+  LayoutChanged(aDataSet);
 end;
 
 procedure TDBCntrlGrid.OnNewDataSet(aDataSet: TDataset);
@@ -1199,9 +1195,7 @@ end;
 
 procedure TDBCntrlGrid.DrawAllRows;
 begin
-  fSavedRecNo := -1;
-  if  ValidDataSet and FDatalink.DataSet.Active then
-    fSavedRecNo := FDatalink.DataSet.RecNo;
+
   inherited DrawAllRows;
   if  ValidDataSet and FDatalink.DataSet.Active then
   begin
@@ -1495,6 +1489,8 @@ begin
 end;
 
 procedure TDBCntrlGrid.LinkActive(Value: Boolean);
+var
+  B1 : TBookMark;
 begin
   if not Value then
   begin
@@ -1510,7 +1506,7 @@ begin
   FRowCache.UseAlternateColors := AlternateColor <> Color;
   FRowCache.AltColorStartNormal := AltColorStartNormal;
   FLastRecordCount := 0;
-  LayoutChanged;
+  LayoutChanged(FDataLink.DataSet);
   if Value then
   begin
     { The problem being solved here is that TDataSet does not readily tell us
@@ -1522,10 +1518,14 @@ begin
     }
     FDataLink.DataSet.DisableControls;
     try
+      B1 := FDataLink.DataSet.GetBookmark;
       FDataLink.DataSet.Last;
       FLastRecordCount := FDataLink.DataSet.RecordCount;
-      if not FDefaultPositionAtEnd then
-        FDataLink.DataSet.First;
+      if not FDefaultPositionAtEnd then begin
+        FDataLink.DataSet.GotoBookmark( B1 );
+        end;
+      FDataLink.DataSet.FreeBookmark( B1 );
+        //FDataLink.DataSet.First;
       FRequiredRecNo := FDataLink.DataSet.RecNo;
     finally
       FDataLink.DataSet.EnableControls;
@@ -1533,15 +1533,35 @@ begin
   end;
 end;
 
-procedure TDBCntrlGrid.LayoutChanged;
+procedure TDBCntrlGrid.LayoutChanged(aDataSet: TDataSet);
+var
+  Cnt: Integer;
+  B1 : TBookMark;
 begin
   if csDestroying in ComponentState then
     exit;
+  if not Assigned( FDataLink.OnLayoutChanged ) then
+    Exit;
+
   BeginUpdate;
+  FDataLink.OnLayoutChanged := nil;
   try
-    if UpdateGridCounts=0 then
-      EmptyGrid;
+    Cnt := UpdateGridCounts;
+    if Cnt=0 then
+      EmptyGrid
+    else
+      begin
+      //if Assigned( aDataSet ) then begin
+      //  if not aDataSet.ControlsDisabled and aDataSet.Active then begin
+      //    B1 := aDataSet.GetBookmark;
+      //    aDataSet.first;  // I don't know how, but this solve the refresh issue; calls missing OnCheckBrowseMode;
+      //    aDataSet.GotoBookmark( B1 );
+      //    aDataSet.FreeBookmark( B1 );
+      //    end;
+      //  end;
+      end;
   finally
+    FDataLink.OnLayoutChanged := @LayoutChanged;
     EndUpdate;
   end;
   UpdateScrollbarRange;
@@ -1669,7 +1689,7 @@ end;
 
 procedure TDBCntrlGrid.ResetSizes;
 begin
-  LayoutChanged;
+  LayoutChanged(Datalink.Dataset);
   inherited ResetSizes;
   DoGridResize;
 end;
@@ -1684,6 +1704,7 @@ end;
 procedure TDBCntrlGrid.UpdateActive;
 var
   PrevRow: Integer;
+  Rn: LongInt;
 begin
   if (csDestroying in ComponentState) or
     (FDatalink=nil) or (not FDatalink.Active) or
@@ -1691,6 +1712,7 @@ begin
     exit;
   if Assigned( OnUpdateActive ) then
     OnUpdateActive( FDataLink );
+  Rn := FDataLink.DataSet.RecNo;
   FDrawRow := FixedRows + FDataLink.ActiveRecord;
   FSelectedRecNo := FDataLink.DataSet.RecNo;
   PrevRow := Row;
@@ -1701,20 +1723,6 @@ begin
     if FDatalink.DataSet.State <> dsInsert then
       FRowCache.InvalidateRowImage(FSelectedRecNo);
   end;
-  if fInternalUpdate And (fSavedRecNo<>-1) and (fSavedRecNo<>FSelectedRecNo) then begin
-    // Some resizing issue here..
-    fInternalUpdate := False;
-    if not fInternalTimer.Enabled then begin
-      fInternalTimer.Tag := fSavedRecNo;
-      fInternalTimer.Enabled := True;
-      end
-    else
-      begin
-      fInternalTimer.Enabled := False;
-      fInternalTimer.Enabled := True;
-      end;
-    end;
-  fInternalUpdate := False;
   InvalidateRow(PrevRow);
   SetupDrawPanel(FDrawRow);
 end;
@@ -1739,10 +1747,6 @@ end;
 constructor TDBCntrlGrid.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  fInternalTimer := TTimer.Create( Self );
-  fInternalTimer.Enabled := False;
-  fInternalTimer.OnTimer := @OnTimer;
-  fInternalTimer.Interval := 50;
   FDataLink := TDBCntrlGridDataLink.Create;//(Self);
   FRowCache := TRowCache.Create;
   FDataLink.OnRecordChanged:=@OnRecordChanged;
@@ -1764,7 +1768,6 @@ begin
   ColCount := 1;
   FixedRows := 0;
   RowCount := 1;
-  fInternalUpdate := False;
   fSelectedRowIndicatorColor:=clBtnFace;
   ColWidths[0] := Scale96ToFont(COL_WIDTH);
   Columns.Add.ReadOnly := true; {Add Dummy Column for Panel}
@@ -1785,27 +1788,9 @@ begin
   Application.RemoveAsyncCalls(self);
   if not (csDesigning in ComponentState) then
     Application.RemoveOnKeyDownBeforeHandler( @KeyDownHandler );
-  fInternalTimer.Free;
   inherited Destroy;
 end;
 
-
-Procedure TDBCntrlGrid.OnTimer(Sender : TObject);
-var
-  RecNo: LongInt;
-begin
-fInternalTimer.Enabled := False;
-fSavedRecNo := fInternalTimer.Tag;
-if  ValidDataSet and FDatalink.DataSet.Active then begin
-  RecNo := FDatalink.DataSet.RecNo;
-  if fSavedRecNo <> RecNo then begin
-    // Go to the REAL record
-    FDatalink.DataSet.RecNo := fSavedRecNo;
-    fSavedRecNo := -1;
-    fInternalUpdate := False;
-    end;
-  end;
-end;
 
 function TDBCntrlGrid.MouseToRecordOffset(const x, y: Integer;
   out RecordOffset: Integer): TGridZone;
@@ -1840,6 +1825,43 @@ begin
   Result := (DataLink <> nil)
             and DataLink.UpdateAction(AAction);
 end;
+
+procedure TDBCntrlGrid.Init(DS: TDataSource);
+begin
+  //
+  EmptyGrid;
+  if assigned(FDataLink) then
+  begin
+    FDataLink.OnDataSetChanged:=nil;
+    FDataLink.OnRecordChanged:=nil;
+    FDataLink.Free;
+  end;
+  if assigned(FRowCache) then FRowCache.Free;
+
+  FDataLink := TDBCntrlGridDataLink.Create;//(Self);
+  FRowCache := TRowCache.Create;
+  FDataLink.OnRecordChanged:=@OnRecordChanged;
+  FDataLink.OnDatasetChanged:=@OnDataSetChanged;
+  FDataLink.OnDataSetOpen:=@OnDataSetOpen;
+  FDataLink.OnDataSetClose:=@OnDataSetClose;
+  FDataLink.OnNewDataSet:=@OnNewDataSet;
+  FDataLink.OnInvalidDataSet:=@OnInvalidDataset;
+  FDataLink.OnInvalidDataSource:=@OnInvalidDataSource;
+  FDataLink.OnDataSetScrolled:=@OnDataSetScrolled;
+  FDataLink.OnLayoutChanged:=@OnLayoutChanged;
+  FDataLink.OnEditingChanged:=@OnEditingChanged;
+  FDataLink.OnUpdateData:=@OnUpdateData;
+  FDataLink.OnCheckBrowseMode := @OnCheckBrowseMode;
+  FDataLink.VisualControl:= True;
+
+  Columns.Delete( 0 );
+  ColWidths[0] := Scale96ToFont(COL_WIDTH);
+  Columns.Add.ReadOnly := true; {Add Dummy Column for Panel}
+  DoGridResize;
+  DataSource := Ds;
+
+end;
+
 procedure Register;
 begin
   {$I dbcontrolgrid_icon.lrs}
