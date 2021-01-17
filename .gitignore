@@ -53,6 +53,9 @@
 hotelsystem.7z
 # Delphi history and backups
 __history/
+backup/
+lib/
+*.obj
 *.~*
 *.DS_Store
 .DS_Store

@@ -49,8 +49,8 @@ unit dbcntrlgrid;
 interface
 
 uses
-  {$ifdef windows}windows,{$endif}Classes, Controls, SysUtils, DB, Grids, DBGrids, Graphics, StdCtrls,
-  LMessages, LResources, Clipbrd;
+  Classes, Controls, SysUtils, DB, Grids, DBGrids, Graphics, StdCtrls,
+  LMessages, LResources, ExtCtrls;
 
 {
   The TRowCache is where we keep track of the DataSet and cache images of each row.
@@ -153,6 +153,9 @@ type
     FCacheRefreshQueued: boolean;   {cache refresh requested during wmpaint}
     FModified: boolean;
     FLastRecordCount: integer;
+    fSavedRecNo : Integer;
+    fInternalUpdate : Boolean;
+    fInternalTimer : TTimer;
 
     {Used to pass mouse clicks to panel when focused row changes}
     FLastMouse: TPoint;
@@ -184,6 +187,7 @@ type
     procedure OnLayoutChanged(aDataSet: TDataSet);
     procedure OnNewDataSet(aDataSet: TDataset);
     procedure OnDataSetScrolled(aDataSet:TDataSet; Distance: Integer);
+    procedure OnTimer(Sender: TObject);
     procedure OnUpdateData(aDataSet: TDataSet);
     procedure SetDataSource(AValue: TDataSource);
     procedure SetDrawPanel(AValue: TWinControl);
@@ -672,8 +676,10 @@ begin
   FCacheRefreshQueued := false;
   aRow := integer(Data);
   FInCacheRefresh := true;
-  if assigned(FDataLink.DataSet) then
+  if assigned(FDataLink.DataSet) then begin
+    fInternalUpdate := True;
     FDatalink.DataSet.MoveBy(aRow - FDrawRow);
+  end;
 end;
 
 procedure TDBCntrlGrid.DoSetupDrawPanel(Data: PtrInt);
@@ -1193,6 +1199,9 @@ end;
 
 procedure TDBCntrlGrid.DrawAllRows;
 begin
+  fSavedRecNo := -1;
+  if  ValidDataSet and FDatalink.DataSet.Active then
+    fSavedRecNo := FDatalink.DataSet.RecNo;
   inherited DrawAllRows;
   if  ValidDataSet and FDatalink.DataSet.Active then
   begin
@@ -1692,6 +1701,20 @@ begin
     if FDatalink.DataSet.State <> dsInsert then
       FRowCache.InvalidateRowImage(FSelectedRecNo);
   end;
+  if fInternalUpdate And (fSavedRecNo<>-1) and (fSavedRecNo<>FSelectedRecNo) then begin
+    // Some resizing issue here..
+    fInternalUpdate := False;
+    if not fInternalTimer.Enabled then begin
+      fInternalTimer.Tag := fSavedRecNo;
+      fInternalTimer.Enabled := True;
+      end
+    else
+      begin
+      fInternalTimer.Enabled := False;
+      fInternalTimer.Enabled := True;
+      end;
+    end;
+  fInternalUpdate := False;
   InvalidateRow(PrevRow);
   SetupDrawPanel(FDrawRow);
 end;
@@ -1716,6 +1739,10 @@ end;
 constructor TDBCntrlGrid.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  fInternalTimer := TTimer.Create( Self );
+  fInternalTimer.Enabled := False;
+  fInternalTimer.OnTimer := @OnTimer;
+  fInternalTimer.Interval := 50;
   FDataLink := TDBCntrlGridDataLink.Create;//(Self);
   FRowCache := TRowCache.Create;
   FDataLink.OnRecordChanged:=@OnRecordChanged;
@@ -1737,6 +1764,7 @@ begin
   ColCount := 1;
   FixedRows := 0;
   RowCount := 1;
+  fInternalUpdate := False;
   fSelectedRowIndicatorColor:=clBtnFace;
   ColWidths[0] := Scale96ToFont(COL_WIDTH);
   Columns.Add.ReadOnly := true; {Add Dummy Column for Panel}
@@ -1757,7 +1785,26 @@ begin
   Application.RemoveAsyncCalls(self);
   if not (csDesigning in ComponentState) then
     Application.RemoveOnKeyDownBeforeHandler( @KeyDownHandler );
+  fInternalTimer.Free;
   inherited Destroy;
+end;
+
+
+Procedure TDBCntrlGrid.OnTimer(Sender : TObject);
+var
+  RecNo: LongInt;
+begin
+fInternalTimer.Enabled := False;
+fSavedRecNo := fInternalTimer.Tag;
+if  ValidDataSet and FDatalink.DataSet.Active then begin
+  RecNo := FDatalink.DataSet.RecNo;
+  if fSavedRecNo <> RecNo then begin
+    // Go to the REAL record
+    FDatalink.DataSet.RecNo := fSavedRecNo;
+    fSavedRecNo := -1;
+    fInternalUpdate := False;
+    end;
+  end;
 end;
 
 function TDBCntrlGrid.MouseToRecordOffset(const x, y: Integer;
