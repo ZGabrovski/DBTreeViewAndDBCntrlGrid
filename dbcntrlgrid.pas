@@ -45,11 +45,11 @@ To allow both installation of IBX DB Control Grid and and this port
 unit dbcntrlgrid;
 
 {$mode objfpc}{$H+}
-
+{$DEFINE dbgDBCntrlGrid}
 interface
 
 uses
-  Classes, Controls, SysUtils, DB, Grids, DBGrids, Graphics, StdCtrls,
+  Classes, Controls, SysUtils, DB, Grids, LazLoggerBase, DBGrids, Graphics, StdCtrls,
   LMessages, LResources, ExtCtrls;
 
 {
@@ -308,12 +308,34 @@ uses LCLType, Math, LCLIntf, Forms, LCLMessageGlue, EditBtn, MaskEdit;
 
 { TDBCntrlGridDataLink }
 
+
+{$ifdef dbgDBCntrlGrid}
+function SBCodeToStr(Code: Integer): String;
+begin
+  Case Code of
+    SB_LINEUP : result := 'SB_LINEUP';
+    SB_LINEDOWN: result := 'SB_LINEDOWN';
+    SB_PAGEUP: result := 'SB_PAGEUP';
+    SB_PAGEDOWN: result := 'SB_PAGEDOWN';
+    SB_THUMBTRACK: result := 'SB_THUMBTRACK';
+    SB_THUMBPOSITION: result := 'SB_THUMBPOSITION';
+    SB_ENDSCROLL: result := 'SB_SCROLLEND';
+    SB_TOP: result := 'SB_TOP';
+    SB_BOTTOM: result := 'SB_BOTTOM';
+    else result :=IntToStr(Code)+ ' -> ?';
+  end;
+end;
+{$endif}
+
+
 procedure TDBCntrlGridDataLink.CheckBrowseMode;
 begin
   inherited CheckBrowseMode;
   if assigned(FOnCheckBrowseMode) then
     OnCheckBrowseMode(DataSet);
 end;
+
+{ TRowCache }
 
 procedure copyImage(form : TCustomControl; destination : TBitmap);
 //procedure that assigns the screenshot of "form" to "destination"
@@ -326,13 +348,17 @@ begin
   h:= form.Height;
   r:= Rect(0,0,w,h);
   tmp:=TBitmap.Create;
+  try
   tmp.Width:=w;
   tmp.Height:=h;
   tmp.Canvas.CopyRect(r, form.Canvas, r);
   destination.Assign(tmp);
+  finally
+  tmp.Free;
+  end;
 end;
 
-{ TRowCache }
+
 var ii : Integer = 0;
 function TRowCache.Render(Control: TWinControl): TBitmap;
 var Container: TBitmap;
@@ -343,17 +369,23 @@ begin
     Container.Canvas.Brush.Color :=  control.Color;
     //Container.canvas.Brush.Style:=bsClear;
     Container.Canvas.FillRect(0,0,Control.Width,Control.Height);
-    //copyImage( TCustomControl( Control ), Container );
     Control.PaintTo( Container.Canvas,0,0 );
-    if ssShift in GetKeyShiftState then begin
-      Container.SaveToFile('c:\temp\'+ii.toString+'.bmp');
-      inc (ii)
-    end;
+    //{$ifdef WINDOWS}
+    //copyImage( TCustomControl( Control ), Container );
+    //{$ELSE}
+    //Control.PaintTo( Container.Canvas,0,0 );
+    //{$ENDIF}
     //Container.SaveToClipboardFormat( PredefinedClipboardFormat(pcfBitmap) );
   except
     Container.Free;
     raise
   end;
+
+  if ssShift in GetKeyShiftState then begin
+    Container.SaveToFile('c:\temp\'+ii.toString+'.bmp');
+    inc (ii)
+  end;
+
   Result := Container;
 
 end;
@@ -464,6 +496,9 @@ end;
 
 function TRowCache.Add2Cache(RecNo: Longint; Control: TWinControl): TBitmap;
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.Add2Cache (RecNo='+RecNo.ToString+' Control='+Control.Name+') ');
+  {$endif}
   Dec(RecNo); {Adust to zero base}
   ExtendCache(RecNo + 1);
   FList[RecNo].FState := rcPresent;
@@ -476,6 +511,10 @@ end;
 function TRowCache.GetRowImage(RecNo, Offset: integer): TBitmap;
 begin
   Result := nil;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.GetRowImage(RecNo='+RecNo.ToString+' Offset='+Offset.ToString+' Length(FList)='+Length(FList).ToString+') ');
+  {$endif}
+
   Dec(RecNo); {adjust to zero base}
   if (RecNo < 0) or (RecNo >= Length(FList)) then
     Exit;
@@ -518,6 +557,10 @@ end;
 
 procedure TRowCache.InvalidateRowImage(RecNo: integer);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.InvalidateRowImage (RecNo='+RecNo.ToString+') ');
+  {$endif}
+
   Dec(RecNo); {adjust to zero base}
   if (RecNo < 0) or (RecNo >= Length(FList)) then
     Exit;
@@ -540,6 +583,9 @@ procedure TRowCache.MarkAsDeleted(RecNo: integer);
 var altColor: boolean;
     i: integer;
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.MarkAsDeleted (RecNo='+RecNo.ToString+') ');
+  {$endif}
   Dec(RecNo); {adjust to zero base}
   if (RecNo < 0) or (RecNo >= Length(FList)) then
     Exit;
@@ -587,6 +633,9 @@ procedure TDBCntrlGrid.EmptyGrid;
 var
   OldFixedRows: Integer;
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.EmptyGrid ');
+  {$endif}
   OldFixedRows := FixedRows;
   Clear;
   FRowCache.ClearCache;
@@ -608,6 +657,9 @@ begin
     result := FDataLink.DataSet.RecordCount
   else
     result := 0;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.GetRecordCount Result='+result.ToString);
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.GetScrollbarParams(out aRange, aPage, aPos: Integer);
@@ -645,8 +697,17 @@ end;
 procedure TDBCntrlGrid.DoDrawRow(aRow: integer; aRect: TRect;
   aState: TGridDrawState);
 var CachedRow: TBitmap;
+  Cr : String;
 begin
   CachedRow := FRowCache.GetRowImage(FSelectedRecNo,aRow-FDrawRow);
+  if Assigned( CachedRow ) then
+    Cr := ' Assigned( CachedRow ) '
+  else
+    Cr := ' CachedRow = nil ';
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.DoDrawRow(FSelectedRecNo='+FSelectedRecNo.ToString+' aRow='+aRow.ToString+' FDrawRow='+FDrawRow.ToString+Cr+') ');
+  {$endif}
+
   {if the row is in the cache then draw it - otherwise schedule a cache refresh cycle}
   if CachedRow = nil then
   begin
@@ -669,7 +730,9 @@ procedure TDBCntrlGrid.DoMoveRecord(Data: PtrInt);
 var aRow: integer;
 begin
   if AppDestroying in Application.Flags then Exit;
-
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.DoMoveRecord(MoveBy='+Data.ToString+')');
+  {$endif}
   FCacheRefreshQueued := false;
   aRow := integer(Data);
   FInCacheRefresh := true;
@@ -681,6 +744,9 @@ end;
 procedure TDBCntrlGrid.DoSetupDrawPanel(Data: PtrInt);
 begin
   if AppDestroying in Application.Flags then Exit;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.DoSetupDrawPanel(FDrawRow='+FDrawRow.ToString+')');
+  {$endif}
   SetupDrawPanel(FDrawRow);
 end;
 
@@ -742,17 +808,26 @@ end;
 
 procedure TDBCntrlGrid.OnRecordChanged(Field: TField);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(ClassName,'.OnRecordChanged(Field=');
+  if Field=nil then DebugLn('nil)')
+  else              DebugLn(Field.FieldName,')');
+  {$endif}
   UpdateActive
 end;
 
 procedure TDBCntrlGrid.OnCheckBrowseMode(aDataSet: TDataSet);
 var RecNo: integer;
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DbgOut(ClassName,'.OnCheckBrowseMode(RecNo=');
+  DebugLn(aDataSet.RecNo.tostring,')');
+  {$endif}
   if assigned(FDrawPanel) and (aDataSet.RecNo > 0)
       and (FModified or (FRowCache.IsEmpty(aDataSet.RecNo))) then
   begin
     RecNo := aDataSet.RecNo;
-    //Application.ProcessMessages;
+    Application.ProcessMessages;
     if RecNo = aDataSet.RecNo then   {Guard against sudden changes}
       FRowCache.Add2Cache(RecNo,FDrawPanel);
   end;
@@ -760,6 +835,10 @@ end;
 
 procedure TDBCntrlGrid.OnDataSetChanged(aDataSet: TDataSet);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnEnter('%s.OnDataSetChanged INIT name=%s aDataSet=%s',
+  	[ClassName,name,dbgsname(ADataset)]);
+  {$endif}
   if aDataSet.State = dsBrowse then
   begin
     if GetRecordCount = 0 then
@@ -783,17 +862,30 @@ begin
     FRequiredRecNo := aDataSet.RecNo + 1;
     Application.QueueAsyncCall(@DoSelectNext,0);
   end;
-  UpdateActive
+  UpdateActive;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnExit('%s.OnDataSetChanged DONE name=%s aDataSet=%s',
+  	[ClassName,name,dbgsname(ADataset)]);
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.OnDataSetOpen(aDataSet: TDataSet);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnEnter('%s.OnDataSetOpen INIT', [ClassName]);
+  {$endif}
   LinkActive(true);
   UpdateActive;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnExit('%s.OnDataSetOpen DONE', [ClassName]);
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.OnDataSetClose(aDataSet: TDataSet);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.OnDataSetClose', [ClassName]);
+  {$endif}
   LinkActive(false);
 end;
 
@@ -801,36 +893,66 @@ procedure TDBCntrlGrid.OnDrawPanelResize(Sender: TObject);
 begin
   FRowCache.Height := FDrawPanel.Height;
   DefaultRowHeight := FDrawPanel.Height + Scale96ToScreen( FRAME_OFFSET * 2 );
+  {$ifdef dbgDBCntrlGrid}
+  DbgOut(ClassName,'.OnDrawPanelResize(Height=');
+  DebugLn(FDrawPanel.Height.tostring,')');
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.OnEditingChanged(aDataSet: TDataSet);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.OnEditingChanged', [ClassName]);
+  if aDataSet<>nil then begin
+    DebugLn(['Editing=', dsEdit = aDataSet.State]);
+    DebugLn(['Inserting=',dsInsert = aDataSet.State]);
+  end else
+    DebugLn('Dataset=nil');
+  {$endif}
   FModified := true;
 end;
 
 procedure TDBCntrlGrid.OnInvalidDataSet(aDataSet: TDataSet);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.OnInvalidDataSet', [ClassName]);
+  {$endif}
   LinkActive(False);
 end;
 
 procedure TDBCntrlGrid.OnInvalidDataSource(aDataSet: TDataset);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.OnInvalidDataSource', [ClassName]);
+  {$endif}
   LinkActive(False);
 end;
 
 procedure TDBCntrlGrid.OnLayoutChanged(aDataSet: TDataSet);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.OnLayoutChanged', [ClassName]);
+  {$endif}
   LayoutChanged(aDataSet);
 end;
 
 procedure TDBCntrlGrid.OnNewDataSet(aDataSet: TDataset);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnEnter('%s.OnNewDataSet INIT', [ClassName]);
+  {$endif}
   LinkActive(True);
   UpdateActive;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnExit('%s.OnNewDataSet DONE', [ClassName]);
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.OnDataSetScrolled(aDataSet: TDataSet; Distance: Integer);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.OnDataSetScrolled Distance=%d ds.RecordCount=%d',[ClassName, Distance, aDataSet.RecordCount]);
+  {$endif}
   UpdateScrollBarRange;
   if Distance <> 0 then
   begin
@@ -852,11 +974,17 @@ end;
 
 procedure TDBCntrlGrid.OnUpdateData(aDataSet: TDataSet);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.OnUpdateData', [ClassName]);
+  {$endif}
   UpdateData;
 end;
 
 procedure TDBCntrlGrid.SetDataSource(AValue: TDataSource);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.SetDataSource', [ClassName]);
+  {$endif}
   if AValue = FDatalink.Datasource then Exit;
   FDataLink.DataSource := AValue;
   UpdateActive;
@@ -865,6 +993,13 @@ end;
 procedure TDBCntrlGrid.SetDrawPanel(AValue: TWinControl);
 var theForm: TWinControl;
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DbgOut(ClassName,'.SetDrawPanel(RecNo=');
+  if Assigned(DataSource) and Assigned(DataSource.DataSet) then
+    DebugLn(DataSource.DataSet.RecNo.tostring,')')
+  else
+    DebugLn('NULL',')');
+  {$endif}
   if FDrawPanel = AValue then Exit;
   if FDrawPanel <> nil then
   begin
@@ -900,6 +1035,9 @@ end;
 
 procedure TDBCntrlGrid.SetOptions(AValue: TPanelGridOptions);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnEnter('%s.SetOptions INIT', [ClassName]);
+  {$endif}
   if FOptions = AValue then Exit;
   FOptions := AValue;
   if dgpIndicator in FOptions then
@@ -909,6 +1047,9 @@ begin
   end
   else
     FixedCols := 0;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnExit('%s.SetOptions DONE', [ClassName]);
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.SetSelectedRowIndicatorColor(AValue: TColor);
@@ -920,6 +1061,13 @@ end;
 
 procedure TDBCntrlGrid.SetupDrawPanel(aRow: integer);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DbgOut(ClassName,'.SetupDrawPanel(RecNo=');
+  if Assigned(DataSource) and Assigned(DataSource.DataSet) then
+    DebugLn(dataSource.DataSet.RecNo.tostring,') aRow=('+aRow.tostring+')')
+  else
+    DebugLn('NULL',') aRow=('+aRow.tostring+')');
+  {$endif}
   if FDrawPanel = nil then Exit;
   if ValidDataSet and FRowCache.AlternateColor[FDataLink.DataSet.RecNo] then
     FDrawPanel.Color := AlternateColor
@@ -960,6 +1108,15 @@ begin
       RowCount := RecCount;
       FixedRows := FRCount;
       Result := RowCount ;
+    {$ifdef dbgDBCntrlGrid}
+    DbgOut(ClassName,'.UpdateGridCounts(RecNo=');
+
+    if Assigned(DataSource) and Assigned(DataSource.DataSet) then
+      DebugLn(DataSource.DataSet.RecNo.tostring,') RowCount=(' +RowCount.tostring,') FixedRows=('+FixedRows.tostring+')')
+    else
+      DebugLn('NULL',') RowCount=(' +RowCount.tostring,') FixedRows=('+FixedRows.tostring+')');
+
+    {$endif}
   finally
     EndUpdate;
   end;
@@ -969,12 +1126,21 @@ procedure TDBCntrlGrid.UpdateBufferCount;
 var
   BCount: Integer;
 begin
+  BCount := -1;
   if FDataLink.Active then begin
     BCount := GetBufferCount;
     if BCount<1 then
       BCount := 1;
     FDataLink.BufferCount:= BCount;
   end;
+  {$ifdef dbgDBCntrlGrid}
+  DbgOut(ClassName,'.UpdateBufferCount(RecNo=');
+
+  if Assigned(DataSource) and Assigned(DataSource.DataSet) then
+    DebugLn(DataSource.DataSet.RecNo.tostring,') BCount=('+BCount.tostring+')')
+  else
+    DebugLn('NULL',') BCount=('+BCount.tostring+')');
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.UpdateDrawPanelBounds(aRow: integer);
@@ -992,6 +1158,13 @@ begin
     r.Bottom := r.Bottom - Scale96ToScreen( FRAME_OFFSET );
     r.Right := r.Right - Scale96ToScreen( FRAME_OFFSET );
     FDrawPanel.BoundsRect := R;
+    {$ifdef dbgDBCntrlGrid}
+    DbgOut(ClassName,'.UpdateDrawPanelBounds(RecNo=');
+    if Assigned(DataSource) and Assigned(DataSource.DataSet) then
+      DebugLn(DataSource.DataSet.RecNo.tostring,') aRow=('+aRow.tostring+')')
+    else
+      DebugLn('NULL',') aRow=('+aRow.tostring+')');
+    {$endif}
   end;
 end;
 
@@ -1002,7 +1175,9 @@ var
 begin
 
   if not HandleAllocated then exit;
-
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnEnter('%s.UpdateScrollbarRange INIT', [ClassName]);
+  {$endif}
 
   GetScrollBarParams(aRange, aPage, aPos);
 
@@ -1031,6 +1206,10 @@ begin
     ((Scrollbars in [ssAutoVertical, ssAutoBoth]) and (aRange>aPAge))
   );
   FOldPosition := aPos;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnExit('%s.UpdateScrollBarRange DONE Handle=%d aRange=%d aPage=%d aPos=%d',
+    [ClassName, Handle, aRange, aPage, aPos]);
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.WMVScroll(var Message: TLMVScroll);
@@ -1091,7 +1270,10 @@ var
 
 begin
   if not FDatalink.Active or not assigned(FDataLink.DataSet) then exit;
-
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnEnter('%s.WMVScroll INIT Code=%s Position=%s OldPos=%s VisibleRowCount=%d',
+  			[ClassName, SbCodeToStr(Message.ScrollCode), dbgs(Message.Pos), Dbgs(FOldPosition),VisibleRowCount]);
+  {$endif}
   IsSeq := FDatalink.DataSet.IsSequenced and not FDataLink.DataSet.Filtered;
   case Message.ScrollCode of
     SB_TOP:
@@ -1112,9 +1294,15 @@ begin
     SB_THUMBTRACK:
         if not (FDatalink.DataSet.IsSequenced) or DsPos then
         begin
+          {$ifdef dbgDBCntrlGrid}
+          DebugLnExit('%s.WMVScroll EXIT: SB_THUMBTRACK: DsPos or not sequenced', [ClassName]);
+          {$endif}
           exit;
         end;
     else begin
+      {$ifdef dbgDBCntrlGrid}
+      DebugLnExit('%s.WMVScroll EXIT: invalid ScrollCode: %d', [ClassName, message.ScrollCode]);
+      {$endif}
       Exit;
     end;
   end;
@@ -1126,6 +1314,9 @@ function TDBCntrlGrid.ISEOF: boolean;
 begin
   with FDatalink do
     result := ValidDataSet and DataSet.EOF;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.IsEOF Result=%s', [ClassName,Result.ToString(true)]);
+  {$endif}
 end;
 
 function TDBCntrlGrid.ValidDataSet: boolean;
@@ -1139,11 +1330,17 @@ begin
   if Result then
   with FDatalink.DataSet do
     Result := (State=dsInsert) and not Modified ;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.InsertCancelable Result=%s', [ClassName,Result.ToString(true)]);
+  {$endif}
 end;
 
 function TDBCntrlGrid.GetBufferCount: integer;
 begin
   Result := ClientHeight div DefaultRowHeight;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.GetBufferCount Result=%s', [ClassName,Result.ToString]);
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.DoEnter;
@@ -1173,6 +1370,9 @@ begin
       Columns[0].Width := ClientWidth;
 
     FRowCache.Width := Columns[0].Width;
+    {$ifdef dbgDBCntrlGrid}
+    DebugLn('%s.DoGridResize Width=%s', [ClassName,FRowCache.Width.ToString]);
+    {$endif}
     UpdateDrawPanelBounds(Row);
 end;
 
@@ -1183,14 +1383,23 @@ begin
 end;
 
 procedure TDBCntrlGrid.DoScrollDataSet(Data: PtrInt);
+var
+  MoveFactor: Integer;
 begin
   if AppDestroying in Application.Flags then Exit;
-  FDataLink.DataSet.MoveBy(integer(Data) - FDataLink.DataSet.RecNo);
+  MoveFactor := integer(Data) - FDataLink.DataSet.RecNo;
+  FDataLink.DataSet.MoveBy(MoveFactor);
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.DoScrollDataSet MoveFactor=%s', [ClassName,MoveFactor.ToString]);
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.DoSelectNext(Data: PtrInt);
 begin
   FDataLink.DataSet.MoveBy(1);
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.DoScrollDataSet DoSelectNext', [ClassName]);
+  {$endif}
 end;
 
 procedure TDBCntrlGrid.DrawAllRows;
@@ -1199,6 +1408,9 @@ begin
   inherited DrawAllRows;
   if  ValidDataSet and FDatalink.DataSet.Active then
   begin
+    {$ifdef dbgDBCntrlGrid}
+    DebugLnEnter('%s DrawAllRows INIT Link.ActiveRecord=%d, Row=%d',[Name, FDataLink.ActiveRecord, Row]);
+    {$endif}
     if FInCacheRefresh and not FCacheRefreshQueued then
     {We are at the end of a cache refresh cycle}
     begin
@@ -1213,6 +1425,9 @@ begin
         Application.QueueAsyncCall(@DoMoveRecord,FSelectedRow);
     end;
     FInCacheRefresh := false;
+    {$ifdef dbgDBCntrlGrid}
+    DebugLnExit('%s DrawAllRows DONE Link.ActiveRecord=%d, Row=%d',[Name, FDataLink.ActiveRecord, Row]);
+    {$endif}
   end;
 end;
 
@@ -1222,7 +1437,14 @@ begin
     FDrawingActiveRecord := (ARow = FDrawRow)
   else
     FDrawingActiveRecord := False;
+  {$ifdef dbgDBCntrlGrid}
+  DbgOut('DrawRow Row=', IntToStr(ARow), ' Act=', dbgs(FDrawingActiveRecord));
+  {$endif}
   inherited DrawRow(ARow);
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(' End Row')
+  {$endif}
+
 end;
 
 procedure TDBCntrlGrid.DrawCell(aCol, aRow: Integer; aRect: TRect;
@@ -1238,7 +1460,12 @@ end;
 
 begin
   PrepareCanvas(aCol, aRow, aState);
-
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn(' ',IntToStr(aCol));
+  if gdSelected in aState then DbgOut('S');
+  if gdFocused in aState then DbgOut('*');
+  if gdFixed in aState then DbgOut('F');
+  {$endif dbgGridPaint}
   if aCol < FixedCols then
      DrawIndicator(Canvas,aRow, aRect,GetDataSetState,false)
   else
@@ -1347,8 +1574,12 @@ procedure TDBCntrlGrid.GridMouseWheel(shift: TShiftState; Delta: Integer);
 begin
   inherited GridMouseWheel(shift, Delta);
   self.SetFocus;
-  if ValidDataSet then
+  if ValidDataSet then begin
     FDataLink.DataSet.MoveBy(Delta);
+    {$ifdef dbgDBCntrlGrid}
+    DebugLn('GridMouseWheel Delta=', IntToStr(Delta));
+    {$endif}
+  end;
 end;
 
 procedure TDBCntrlGrid.KeyDown(var Key: Word; Shift: TShiftState);
@@ -1492,6 +1723,9 @@ procedure TDBCntrlGrid.LinkActive(Value: Boolean);
 var
   B1 : TBookMark;
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.LinkActive Value=%s', [ClassName, Value.ToString(True)]);
+  {$endif}
   if not Value then
   begin
     FRowCache.ClearCache;
@@ -1542,7 +1776,9 @@ begin
     exit;
   if not Assigned( FDataLink.OnLayoutChanged ) then
     Exit;
-
+  {$ifdef dbgDBCntrlGrid}
+  DebugLnEnter('%s.LayoutChanged INIT', [ClassName]);
+  {$endif}
   BeginUpdate;
   FDataLink.OnLayoutChanged := nil;
   try
@@ -1563,6 +1799,9 @@ begin
   finally
     FDataLink.OnLayoutChanged := @LayoutChanged;
     EndUpdate;
+    {$ifdef dbgDBCntrlGrid}
+    DebugLnExit('%s.LayoutChanged DONE', [ClassName]);
+    {$endif}
   end;
   UpdateScrollbarRange;
 end;
@@ -1605,7 +1844,7 @@ begin
     doInherited;
     exit;
   end;}
-
+  {$ifdef dbgDBCntrlGrid}DebugLnEnter('%s.MouseDown INIT', [ClassName]); {$endif}
   Gz:=MouseToGridZone(X,Y);
   CacheMouseDown(X,Y);
   case Gz of
@@ -1642,17 +1881,20 @@ begin
         end;
       end;
   end;
+  {$ifdef dbgDBCntrlGrid}DebugLnExit('%s.MouseDown DONE', [ClassName]); {$endif}
 end;
 
 procedure TDBCntrlGrid.MouseUp(Button: TMouseButton; Shift: TShiftState; X,
   Y: Integer);
 begin
   inherited MouseUp(Button, Shift, X, Y);
+  {$ifdef dbgDBCntrlGrid}DebugLnEnter('%s.MouseUp INIT', [ClassName]); {$endif}
   FLastMouse.X := X;
   FLastMouse.Y := Y;
   FLastMouseButton := Button;
   FLastMouseShiftState := Shift;
   Application.QueueAsyncCall(@DoSendMouseClicks,0);
+  {$ifdef dbgDBCntrlGrid}DebugLnExit('%s.MouseUp DONE', [ClassName]); {$endif}
 end;
 
 procedure TDBCntrlGrid.MoveSelection;
@@ -1710,6 +1952,10 @@ begin
     (FDatalink=nil) or (not FDatalink.Active) or
     (FDatalink.ActiveRecord<0) then
     exit;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.UpdateActive (%s): ActiveRecord=%d FixedRows=%d Row=%d',
+  		[ClassName, Name, FDataLink.ActiveRecord, FixedRows, Row]);
+  {$endif}
   if Assigned( OnUpdateActive ) then
     OnUpdateActive( FDataLink );
   Rn := FDataLink.DataSet.RecNo;
@@ -1729,11 +1975,17 @@ end;
 
 procedure TDBCntrlGrid.UpdateData;
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.UpdateData', [ClassName]);
+  {$endif}
   FModified := false;
 end;
 
 procedure TDBCntrlGrid.UpdateShowing;
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.UpdateShowing', [ClassName]);
+  {$endif}
   inherited UpdateShowing;
   DoGridResize
 end;
@@ -1741,6 +1993,9 @@ end;
 procedure TDBCntrlGrid.UpdateVertScrollbar(const aVisible: boolean;
   const aRange, aPage, aPos: Integer);
 begin
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.UpdateVertScrollbar aRange=%d aPage=%d aPos=%d', [ClassName,aRange, aPage, aPos]);
+  {$endif}
   UpdateScrollbarRange;
 end;
 
