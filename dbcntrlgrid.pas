@@ -45,7 +45,7 @@ To allow both installation of IBX DB Control Grid and and this port
 unit dbcntrlgrid;
 
 {$mode objfpc}{$H+}
-{$DEFINE dbgDBCntrlGrid}
+//{$DEFINE dbgDBCntrlGrid}
 interface
 
 uses
@@ -213,7 +213,7 @@ type
     procedure GridMouseWheel(shift: TShiftState; Delta: Integer); override;
     procedure KeyDown(var Key : Word; Shift : TShiftState); override;
     procedure LinkActive(Value: Boolean); virtual;
-    procedure LayoutChanged(aDataSet: TDataSet); virtual;
+    procedure LayoutChanged; virtual;
     procedure MouseDown(Button: TMouseButton; Shift:TShiftState; X,Y:Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift:TShiftState; X,Y:Integer); override;
     procedure MoveSelection; override;
@@ -225,6 +225,7 @@ type
     procedure UpdateData; virtual;
     procedure UpdateShowing; override;
     procedure UpdateVertScrollbar(const aVisible: boolean; const aRange,aPage,aPos: Integer); override;
+    procedure DoOnChangeBounds; override;
   public
     { Public declarations }
     constructor Create(AOwner: TComponent); override;
@@ -429,7 +430,7 @@ var i: integer;
 begin
   if aMaxIndex > Length(FList) then
   begin
-    aMaxIndex := aMaxIndex + 10;
+     //aMaxIndex := aMaxIndex + 10;
     StartIndex := Length(FList);
     SetLength(FList,aMaxIndex);
     if not UseAlternateColors then
@@ -854,7 +855,7 @@ begin
       FRowCache.MarkAsDeleted(FSelectedRecNo);
       Dec(FSelectedRow);
     end;
-    LayoutChanged(aDataSet);
+    LayoutChanged;
   end;
   FLastRecordCount := GetRecordCount;
   if aDataSet.State = dsInsert then
@@ -933,7 +934,7 @@ begin
   {$ifdef dbgDBCntrlGrid}
   DebugLn('%s.OnLayoutChanged', [ClassName]);
   {$endif}
-  LayoutChanged(aDataSet);
+  LayoutChanged;
 end;
 
 procedure TDBCntrlGrid.OnNewDataSet(aDataSet: TDataset);
@@ -1110,12 +1111,10 @@ begin
       Result := RowCount ;
     {$ifdef dbgDBCntrlGrid}
     DbgOut(ClassName,'.UpdateGridCounts(RecNo=');
-
     if Assigned(DataSource) and Assigned(DataSource.DataSet) then
       DebugLn(DataSource.DataSet.RecNo.tostring,') RowCount=(' +RowCount.tostring,') FixedRows=('+FixedRows.tostring+')')
     else
       DebugLn('NULL',') RowCount=(' +RowCount.tostring,') FixedRows=('+FixedRows.tostring+')');
-
     {$endif}
   finally
     EndUpdate;
@@ -1740,7 +1739,7 @@ begin
   FRowCache.UseAlternateColors := AlternateColor <> Color;
   FRowCache.AltColorStartNormal := AltColorStartNormal;
   FLastRecordCount := 0;
-  LayoutChanged(FDataLink.DataSet);
+  LayoutChanged;
   if Value then
   begin
     { The problem being solved here is that TDataSet does not readily tell us
@@ -1767,20 +1766,17 @@ begin
   end;
 end;
 
-procedure TDBCntrlGrid.LayoutChanged(aDataSet: TDataSet);
+procedure TDBCntrlGrid.LayoutChanged;
 var
   Cnt: Integer;
   B1 : TBookMark;
 begin
   if csDestroying in ComponentState then
     exit;
-  if not Assigned( FDataLink.OnLayoutChanged ) then
-    Exit;
   {$ifdef dbgDBCntrlGrid}
   DebugLnEnter('%s.LayoutChanged INIT', [ClassName]);
   {$endif}
   BeginUpdate;
-  FDataLink.OnLayoutChanged := nil;
   try
     Cnt := UpdateGridCounts;
     if Cnt=0 then
@@ -1797,7 +1793,6 @@ begin
       //  end;
       end;
   finally
-    FDataLink.OnLayoutChanged := @LayoutChanged;
     EndUpdate;
     {$ifdef dbgDBCntrlGrid}
     DebugLnExit('%s.LayoutChanged DONE', [ClassName]);
@@ -1931,7 +1926,7 @@ end;
 
 procedure TDBCntrlGrid.ResetSizes;
 begin
-  LayoutChanged(Datalink.Dataset);
+  LayoutChanged;
   inherited ResetSizes;
   DoGridResize;
 end;
@@ -1997,6 +1992,15 @@ begin
   DebugLn('%s.UpdateVertScrollbar aRange=%d aPage=%d aPos=%d', [ClassName,aRange, aPage, aPos]);
   {$endif}
   UpdateScrollbarRange;
+end;
+
+procedure TDBCntrlGrid.DoOnChangeBounds;
+begin
+  BeginUpdate;
+  inherited DoOnChangeBounds;
+  if HandleAllocated then
+    LayoutChanged;
+  EndUpdate;
 end;
 
 constructor TDBCntrlGrid.Create(AOwner: TComponent);
