@@ -4,6 +4,7 @@
     <PathDelim Value="\"/>
     <Name Value="dbcontrols"/>
     <Type Value="RunAndDesignTime"/>
+    <Author Value="Tony Whyman, Zdravko Gabrovski"/>
     <CompilerOptions>
       <Version Value="11"/>
       <PathDelim Value="\"/>
@@ -13,7 +14,7 @@
     </CompilerOptions>
     <Description Value="Data controls
 DBTreeView Ported from the original IBX Tree view"/>
-    <Version Minor="1" Build="1"/>
+    <Version Minor="1" Release="1" Build="1"/>
     <Files>
       <Item>
         <Filename Value="dbtreeview.pas"/>

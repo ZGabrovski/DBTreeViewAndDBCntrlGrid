@@ -1,4 +1,4 @@
-   
+
 {
  /***************************************************************************
                                DBControlGrid.pas
@@ -46,11 +46,12 @@ unit dbcntrlgrid;
 
 {$mode objfpc}{$H+}
 //{$DEFINE dbgDBCntrlGrid}
+{$DEFINE CONSOLEDEBUG}
 interface
 
 uses
   {$IFDEF CONSOLEDEBUG}
-  {$IFDEF WINDOWS} Windows,{$ENDIF}
+  {$IFDEF WINDOWS} Windows, {$ENDIF}
   {$ENDIF}
   Classes, Controls, SysUtils, DB, Grids, LazLoggerBase, DBGrids, Graphics, StdCtrls,
   LMessages, LResources, ExtCtrls;
@@ -157,12 +158,15 @@ type
     FCacheRefreshQueued: boolean;   {cache refresh requested during wmpaint}
     FModified: boolean;
     FLastRecordCount: integer;
-
+    fResizeTimer : TTimer;
+    BeginUpdateCount : Integer;
     {Used to pass mouse clicks to panel when focused row changes}
     FLastMouse: TPoint;
     FLastMouseButton: TMouseButton;
     FLastMouseShiftState: TShiftState;
     fSelectedRowIndicatorColor : TColor;
+    fSaveAfterScrollHandler : TDataSetNotifyEvent;
+
     function ActiveControl: TControl;
     procedure EmptyGrid;
     function GetDataSource: TDataSource;
@@ -202,6 +206,7 @@ type
     function  ISEOF: boolean;
     function  ValidDataSet: boolean;
     function  InsertCancelable: boolean;
+    procedure ResizeTitemTimer( Sender : TObject );
   protected
     { Protected declarations }
     function  GetBufferCount: integer; virtual;
@@ -718,24 +723,44 @@ begin
   {if the row is in the cache then draw it - otherwise schedule a cache refresh cycle}
   if CachedRow = nil then
   begin
-    if not FCacheRefreshQueued  then
+    if not FCacheRefreshQueued and (BeginUpdateCount = 0 )  then
     begin
+      //
+      // Save somwhere afterscroll event (if exists)
+      //
+      if Assigned(DataSource) and Assigned(DataSource.DataSet) and (BeginUpdateCount = 0 ) then begin
+        fSaveAfterScrollHandler := DataSource.DataSet.AfterScroll;
+        DataSource.DataSet.AfterScroll := nil;
+        end;
+      inc( BeginUpdateCount );
+
+      {$IFDEF CONSOLEDEBUG}
+      WriteLn();
+      WriteLn('Begin update');
+      WriteLn( StringOfChar(#9,BeginUpdateCount)+'FCacheRefreshQueued = true');
+      {$ENDIF}
+
       FCacheRefreshQueued := true;
       Rn := DataSource.DataSet.RecNo;
       FRequiredRecNo := DataSource.DataSet.RecNo;
       {$IFDEF CONSOLEDEBUG}
-      WriteLn( 'TDBCntrlGrid.DoDrawRow started, RecNo=', FRequiredRecNo );
+      WriteLn( StringOfChar(#9,BeginUpdateCount)+'TDBCntrlGrid.DoDrawRow started, SAVE FRequiredRecNo=', FRequiredRecNo );
       {$ENDIF}
       Application.QueueAsyncCall(@DoMoveRecord,PtrInt(aRow));
+    end
+    else
+    begin
+      {$IFDEF CONSOLEDEBUG}
+      if (BeginUpdateCount <> 0 ) then
+        WriteLn( StringOfChar(#9,BeginUpdateCount)+'!!!!!!!!!!!!!!!! BeginUpdatecount protect you! STILL FRequiredRecNo= ', FRequiredRecNo );
+      {$ENDIF}
     end;
     Canvas.FillRect(aRect);
-    //Canvas.TextOut(0,0,'TDBCntrlGrid.DoDrawRow, NOT Assigned(CachedRow)')
   end
   else
      begin
      Canvas.FillRect(aRect);
      Canvas.Draw(aRect.Left,aRect.Top+Scale96ToScreen( FRAME_OFFSET ),CachedRow);
-     //Canvas.TextOut(0,0,'TDBCntrlGrid.DoDrawRow, Assigned(CachedRow)');
      end;
 end;
 
@@ -750,12 +775,18 @@ begin
   aRow := integer(Data);
   FInCacheRefresh := true;
   if assigned(FDataLink.DataSet) then begin
+    {$IFDEF CONSOLEDEBUG}
+    WriteLn( );
+    WriteLn( StringOfChar(#9,BeginUpdateCount)+'FCacheRefreshQueued = false; FInCacheRefresh = true' );
+    WriteLn( StringOfChar(#9,BeginUpdateCount)+'TDBCntrlGrid.DoMoveRecord, BeforeMove Recno=', FDataLink.DataSet.RecNo );
+    {$ENDIF}
     FDatalink.DataSet.MoveBy(aRow - FDrawRow);
     {$IFDEF CONSOLEDEBUG}
-    WriteLn( 'TDBCntrlGrid.DoMoveRecord, Row,Arow,fDrawRow=', aRow - FDrawRow, aRow, fDrawRow );
+    WriteLn( StringOfChar(#9,BeginUpdateCount)+'TDBCntrlGrid.DoMoveRecord, AfterMove Row,Arow,fDrawRow=, Recno=', aRow - FDrawRow,',', aRow,',', fDrawRow,',', FDataLink.DataSet.RecNo );
+    WriteLn( );
     {$ENDIF}
   end;
-  UpdateActive;
+  //UpdateActive;
 end;
 
 procedure TDBCntrlGrid.DoSetupDrawPanel(Data: PtrInt);
@@ -1353,6 +1384,22 @@ begin
   {$endif}
 end;
 
+procedure TDBCntrlGrid.ResizeTitemTimer(Sender: TObject);
+begin
+  fResizetimer.Enabled := False;
+
+  if ColCount > 1 then
+    Columns[0].Width := ClientWidth - ColWidths[0]
+  else
+    Columns[0].Width := ClientWidth;
+
+  FRowCache.Width := Columns[0].Width;
+  {$ifdef dbgDBCntrlGrid}
+  DebugLn('%s.DoGridResize Width=%s', [ClassName,FRowCache.Width.ToString]);
+  {$endif}
+  UpdateDrawPanelBounds( Row );
+end;
+
 function TDBCntrlGrid.GetBufferCount: integer;
 begin
   Result := ClientHeight div DefaultRowHeight;
@@ -1381,17 +1428,24 @@ end;
 procedure TDBCntrlGrid.DoGridResize;
 begin
     if Columns.Count = 0 then Exit;
+    // Reset the timer
+    // After the interval - will resize the grid.
+    fResizetimer.Enabled := False;
+    fResizetimer.Enabled := True;
 
-    if ColCount > 1 then
-      Columns[0].Width := ClientWidth - ColWidths[0]
-    else
-      Columns[0].Width := ClientWidth;
-
-    FRowCache.Width := Columns[0].Width;
-    {$ifdef dbgDBCntrlGrid}
-    DebugLn('%s.DoGridResize Width=%s', [ClassName,FRowCache.Width.ToString]);
-    {$endif}
-    UpdateDrawPanelBounds(Row);
+    // Code moved to timer
+    //if Columns.Count = 0 then Exit;
+    //
+    //if ColCount > 1 then
+    //  Columns[0].Width := ClientWidth - ColWidths[0]
+    //else
+    //  Columns[0].Width := ClientWidth;
+    //
+    //FRowCache.Width := Columns[0].Width;
+    //{$ifdef dbgDBCntrlGrid}
+    //DebugLn('%s.DoGridResize Width=%s', [ClassName,FRowCache.Width.ToString]);
+    //{$endif}
+    //UpdateDrawPanelBounds( Row );
 end;
 
 procedure TDBCntrlGrid.DoOnResize;
@@ -1406,14 +1460,26 @@ var
 begin
   if AppDestroying in Application.Flags then Exit;
   MoveFactor := integer(Data) - FDataLink.DataSet.RecNo;
+  {$IFDEF CONSOLEDEBUG}
+  WriteLn( StringOfChar(#9,BeginUpdateCount)+'TDBCntrlGrid.DoScrollDataSet, BeforeScroll MoveFactor=, RecNo=', MoveFactor,',', FDataLink.DataSet.RecNo );
+  {$ENDIF}
+
   FDataLink.DataSet.MoveBy(MoveFactor);
   {$ifdef dbgDBCntrlGrid}
   DebugLn('%s.DoScrollDataSet MoveFactor=%s', [ClassName,MoveFactor.ToString]);
   {$endif}
 
   {$IFDEF CONSOLEDEBUG}
-  WriteLn( 'TDBCntrlGrid.DoScrollDataSet, FRequiredRecNo=', Data );
+  WriteLn( StringOfChar(#9,BeginUpdateCount)+'TDBCntrlGrid.DoScrollDataSet, AfterScroll FRequiredRecNo=, RecNo=', Data,',', FDataLink.DataSet.RecNo );
+  WriteLn('EndUpdate');
   {$ENDIF}
+  dec( BeginUpdateCount );
+  //
+  // Restore afterscroll handler
+  //
+  if Assigned(DataSource) and Assigned(DataSource.DataSet) and (BeginUpdateCount = 0 ) then begin
+    DataSource.DataSet.AfterScroll := fSaveAfterScrollHandler;
+    end;
 
   if FDataLink.DataSet.RecNo <> Data then
     FDataLink.DataSet.RecNo := Data;
@@ -1443,6 +1509,9 @@ begin
     begin
       if FRequiredRecNo > 0  then
       begin
+        {$IFDEF CONSOLEDEBUG}
+        WriteLn( StringOfChar(#9,BeginUpdateCount)+'TDBCntrlGrid.DrawAllRows, Call DoScrollDataSet with FRequiredRecNo=', FRequiredRecNo );
+        {$ENDIF}
         Application.QueueAsyncCall(@DoScrollDataSet,FRequiredRecNo);
 
         //if FRequiredRecNo <> FDataLink.DataSet.RecNo then begin
@@ -1450,21 +1519,26 @@ begin
         //  Application.QueueAsyncCall(@DoScrollDataSet,FRequiredRecNo);
         //  //FDataLink.DataSet.RecNo := FRequiredRecNo;
         //  end;
-
-
         FRequiredRecNo := 0;
-        UpdateActive;
+        //UpdateActive;
       end
       else
       if FDrawRow <> FSelectedRow then begin
         {$IFDEF CONSOLEDEBUG}
-        WriteLn( 'TDBCntrlGrid.DrawAllRows, FSelectedRow=', FSelectedRow );
+        WriteLn( StringOfChar(#9,BeginUpdateCount)+'TDBCntrlGrid.DrawAllRows, FSelectedRow=', FSelectedRow );
         {$ENDIF}
 
-        Application.QueueAsyncCall(@DoMoveRecord,FSelectedRow);
+         //Application.QueueAsyncCall(@DoMoveRecord,FSelectedRow);
       end;
     end;
+    {$IFDEF CONSOLEDEBUG}
+    if FInCacheRefresh then begin
+      WriteLn( StringOfChar(#9,BeginUpdateCount)+'Draw all rows: FInCacheRefresh = false;' );
+      WriteLn( );
+      end;
+    {$ENDIF}
     FInCacheRefresh := false;
+
     {$ifdef dbgDBCntrlGrid}
     DebugLnExit('%s DrawAllRows DONE Link.ActiveRecord=%d, Row=%d',[Name, FDataLink.ActiveRecord, Row]);
     {$endif}
@@ -1512,8 +1586,10 @@ begin
   if (FDrawPanel = nil) or not FDataLink.Active then
     DrawFillRect(Canvas,aRect)
   else
-  if not FDrawingActiveRecord and FDataLink.Active then
-      DoDrawRow(aRow,aRect,aState)
+  if not FDrawingActiveRecord and FDataLink.Active then begin
+    if BeginUpdateCount = 0 then
+      DoDrawRow(aRow,aRect,aState);
+    end
   else begin
     Canvas.Brush.Color := fSelectedRowIndicatorColor;
     DrawFillRect(Canvas,aRect);
@@ -2067,7 +2143,13 @@ begin
   FDataLink.OnUpdateData:=@OnUpdateData;
   FDataLink.OnCheckBrowseMode := @OnCheckBrowseMode;
   FDataLink.VisualControl:= True;
+  fResizetimer := TTimer.Create(nil);
+  fResizetimer.Interval := 200;
+  fResizetimer.OnTimer := @ResizeTitemTimer;
+  fResizetimer.Enabled := False;
+  fSaveAfterScrollHandler := nil;
   ScrollBars := ssAutoVertical;
+  BeginUpdateCount := 0;
   FOptions := [dgpIndicator];
   FixedCols := 1;
   ColCount := 1;
@@ -2131,41 +2213,6 @@ begin
             and DataLink.UpdateAction(AAction);
 end;
 
-//procedure TDBCntrlGrid.Init(DS: TDataSource);
-//begin
-//  //
-//  EmptyGrid;
-//  if assigned(FDataLink) then
-//  begin
-//    FDataLink.OnDataSetChanged:=nil;
-//    FDataLink.OnRecordChanged:=nil;
-//    FDataLink.Free;
-//  end;
-//  if assigned(FRowCache) then FRowCache.Free;
-//
-//  FDataLink := TDBCntrlGridDataLink.Create;//(Self);
-//  FRowCache := TRowCache.Create;
-//  FDataLink.OnRecordChanged:=@OnRecordChanged;
-//  FDataLink.OnDatasetChanged:=@OnDataSetChanged;
-//  FDataLink.OnDataSetOpen:=@OnDataSetOpen;
-//  FDataLink.OnDataSetClose:=@OnDataSetClose;
-//  FDataLink.OnNewDataSet:=@OnNewDataSet;
-//  FDataLink.OnInvalidDataSet:=@OnInvalidDataset;
-//  FDataLink.OnInvalidDataSource:=@OnInvalidDataSource;
-//  FDataLink.OnDataSetScrolled:=@OnDataSetScrolled;
-//  FDataLink.OnLayoutChanged:=@OnLayoutChanged;
-//  FDataLink.OnEditingChanged:=@OnEditingChanged;
-//  FDataLink.OnUpdateData:=@OnUpdateData;
-//  FDataLink.OnCheckBrowseMode := @OnCheckBrowseMode;
-//  FDataLink.VisualControl:= True;
-//
-//  Columns.Delete( 0 );
-//  ColWidths[0] := Scale96ToFont(COL_WIDTH);
-//  Columns.Add.ReadOnly := true; {Add Dummy Column for Panel}
-//  DoGridResize;
-//  DataSource := Ds;
-//
-//end;
 
 procedure Register;
 begin
