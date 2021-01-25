@@ -46,7 +46,7 @@ unit dbcntrlgrid;
 
 {$mode objfpc}{$H+}
 //{$DEFINE dbgDBCntrlGrid}
-{$DEFINE CONSOLEDEBUG}
+//{$DEFINE CONSOLEDEBUG}
 interface
 
 uses
