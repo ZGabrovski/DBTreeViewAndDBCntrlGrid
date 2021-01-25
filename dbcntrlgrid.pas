@@ -2165,6 +2165,8 @@ end;
 
 destructor TDBCntrlGrid.Destroy;
 begin
+  fResizetimer.Enabled:=False;
+  fResizetimer.Free;
   if assigned(FDataLink) then
   begin
     FDataLink.OnDataSetChanged:=nil;
