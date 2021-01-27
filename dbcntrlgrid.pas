@@ -861,7 +861,9 @@ begin
       and (FModified or (FRowCache.IsEmpty(aDataSet.RecNo))) then
   begin
     RecNo := aDataSet.RecNo;
-    //Application.ProcessMessages;
+    {$ifdef UNIX}
+    Application.ProcessMessages;
+    {$ENDIF}
     if (RecNo = aDataSet.RecNo) and ( KeyField<>'' ) then   {Guard against sudden changes}
       FRowCache.Add2Cache(RecNo, FDrawPanel, aDataSet.FieldByName(KeyField).Value );
   end;
