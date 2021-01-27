@@ -869,7 +869,7 @@ begin
       and (FModified or (FRowCache.IsEmpty(aDataSet.RecNo))) then
   begin
     RecNo := aDataSet.RecNo;
-    {$ifdef UNIX}
+    {$ifdef LINUX}
     Application.ProcessMessages;
     {$ENDIF}
     if (RecNo = aDataSet.RecNo) and ( KeyField<>'' ) then   {Guard against sudden changes}
