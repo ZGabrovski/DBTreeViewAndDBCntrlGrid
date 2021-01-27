@@ -114,7 +114,7 @@ type
     procedure ClearCache;
     function Render(Control: TWinControl ): TBitmap;
     function Add2Cache(RecNo: Longint; Control: TWinControl; RecKey: Variant ): TBitmap;
-    function GetRowImage(RecNo, aRow: Longint): TBitmap;
+    function GetRowImage(RecNo, aRow: Longint; KeyFieldValue: Variant): TBitmap;
     procedure InvalidateRowImage(RecNo: integer);
     function IsEmpty(RecNo: integer): boolean;
     procedure MarkAsDeleted(RecNo: integer);
@@ -534,9 +534,11 @@ begin
   Result := FList[RecNo].FBitmap;
 end;
 
-function TRowCache.GetRowImage(RecNo, aRow: Longint): TBitmap;
+function TRowCache.GetRowImage(RecNo, aRow: Longint; KeyFieldValue: Variant
+  ): TBitmap;
 var
   i: Integer;
+  ff: TRowDetails;
 begin
   Result := nil;
   {$ifdef dbgDBCntrlGrid}
@@ -545,10 +547,16 @@ begin
 
   Dec(RecNo); {adjust to zero base}
   if (RecNo < 0) or (RecNo >= Length(FList)) then begin
-    //if Length( aRowToRecNoArr ) > aRow then
-    //  if aRowToRecNoArr[ aRow ] < Length( FList ) then
-    //    if FList[ aRowToRecNoArr[ aRow ] ].FState = rcPresent then
-    //      Exit( FList[ aRowToRecNoArr[ aRow ] ].FBitmap );
+    if KeyFieldValue<>NULL then begin
+      for ff in FList do        // Try to find by Key(in a case of insert, RecNo is = 0)
+        if ( ff.aRecKey = KeyFieldValue) and ( ff.FState = rcPresent ) then
+          Exit( FF.FBitmap );
+      end;
+
+    if Length( aRowToRecNoArr ) > aRow then
+      if aRowToRecNoArr[ aRow ] < Length( FList ) then
+        if FList[ aRowToRecNoArr[ aRow ] ].FState = rcPresent then
+          Exit( FList[ aRowToRecNoArr[ aRow ] ].FBitmap );
     Exit;
     end;
 
@@ -718,7 +726,7 @@ begin
   {$ENDIF}
   CachedRow := nil;
   if Assigned( fDatalink.DataSet ) then
-    CachedRow := FRowCache.GetRowImage( fDatalink.DataSet.RecNo,aRow );
+    CachedRow := FRowCache.GetRowImage( fDatalink.DataSet.RecNo,aRow, fDatalink.DataSet.FieldByName(KeyField).Value );
 
   {if the row is in the cache then draw it - otherwise schedule a cache refresh cycle}
   if CachedRow = nil then begin
@@ -730,7 +738,7 @@ begin
       // Mark image as missing;
       FRowCache.InvalidateRowImage( fDatalink.DataSet.RecNo );
 
-      CachedRow := FRowCache.GetRowImage(fDatalink.DataSet.RecNo,aRow);
+      //CachedRow := FRowCache.GetRowImage(fDatalink.DataSet.RecNo,aRow);
       {$IFDEF CONSOLEDEBUG}
       WriteLn('Cache Build, FSelectedRecNo= RecNo=',FSelectedRecNo,',',Datalink.DataSet.RecNo);
       {$ENDIF}
