@@ -919,7 +919,7 @@ end;
 procedure TDBCntrlGrid.OnDrawPanelResize(Sender: TObject);
 begin
   FRowCache.Height := FDrawPanel.Height;
-  DefaultRowHeight := FDrawPanel.Height + Scale96ToScreen( FRAME_OFFSET * 2 );
+  DefaultRowHeight := FDrawPanel.Height + Scale96ToScreen( FRAME_OFFSET ) + Scale96ToScreen( FRAME_OFFSET );
   {$ifdef dbgDBCntrlGrid}
   DbgOut(ClassName,'.OnDrawPanelResize(Height=');
   DebugLn(FDrawPanel.Height.tostring,')');
@@ -1084,7 +1084,7 @@ begin
     if assigned(FDrawPanel) then
     begin
       FDrawPanel.Parent := self;
-      DefaultRowHeight := FDrawPanel.Height + Scale96ToScreen( FRAME_OFFSET * 2 );
+      DefaultRowHeight := FDrawPanel.Height + Scale96ToScreen( FRAME_OFFSET ) +  Scale96ToScreen( FRAME_OFFSET );
       if csDesigning in ComponentState then
         UpdateDrawPanelBounds(0)
       else
